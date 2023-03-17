@@ -11,6 +11,7 @@ import {
   scan,
   startWith,
   switchMap,
+  tap,
 } from 'rxjs';
 import { IGif } from '../interfaces/gif.interface';
 import { IRedditPagination, IRedditPost, IRedditResponse } from '../interfaces';
@@ -31,7 +32,15 @@ export class RedditService {
     const subreddit$ = subredditFormControl.valueChanges.pipe(
       debounceTime(500),
       distinctUntilChanged(),
-      startWith(subredditFormControl.value)
+      startWith(subredditFormControl.value),
+      tap(() =>
+        this._pagination$.next({
+          after: null,
+          totalFound: 0,
+          retries: 0,
+          infiniteScroll: null,
+        })
+      )
     );
 
     return subreddit$.pipe(

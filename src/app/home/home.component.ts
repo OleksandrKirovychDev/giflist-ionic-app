@@ -7,19 +7,30 @@ import { BehaviorSubject, combineLatest, map, startWith } from 'rxjs';
 import { GifListComponent } from './ui/gif-list.component';
 import { RedditService } from '../shared/data-access/reddit.service';
 import { IGif } from '../shared/interfaces';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { SearchBarComponent } from './ui/search-bar.component';
 
 const routes: Routes = [];
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, IonicModule, GifListComponent],
+  imports: [
+    CommonModule,
+    IonicModule,
+    GifListComponent,
+    ReactiveFormsModule,
+    SearchBarComponent,
+  ],
   providers: [],
   template: `
     <ng-container *ngIf="vm$ | async as vm">
       <ion-header>
         <ion-toolbar>
           <ion-title> Home </ion-title>
+        </ion-toolbar>
+        <ion-toolbar>
+          <app-search-bar [searchForm]="subredditFormControl"></app-search-bar>
         </ion-toolbar>
       </ion-header>
       <ion-content>
@@ -45,11 +56,13 @@ const routes: Routes = [];
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HomeComponent {
+  public subredditFormControl = new FormControl('gifs');
+
   private _currentlyLoadingGifs$ = new BehaviorSubject<string[]>([]);
   private _loadedGifs$ = new BehaviorSubject<string[]>([]);
 
   private gifs$ = combineLatest([
-    this.redditService.getGifs(),
+    this.redditService.getGifs(this.subredditFormControl),
     this._currentlyLoadingGifs$,
     this._loadedGifs$,
   ]).pipe(
