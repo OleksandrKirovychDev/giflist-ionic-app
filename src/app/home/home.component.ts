@@ -9,6 +9,7 @@ import { RedditService } from '../shared/data-access/reddit.service';
 import { IGif } from '../shared/interfaces';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { SearchBarComponent } from './ui/search-bar.component';
+import { SettingsComponent } from '../settings/settings.component';
 
 const routes: Routes = [];
 
@@ -21,6 +22,7 @@ const routes: Routes = [];
     GifListComponent,
     ReactiveFormsModule,
     SearchBarComponent,
+    SettingsComponent,
   ],
   providers: [],
   template: `
@@ -31,6 +33,14 @@ const routes: Routes = [];
         </ion-toolbar>
         <ion-toolbar>
           <app-search-bar [searchForm]="subredditFormControl"></app-search-bar>
+          <ion-buttons slot="end">
+            <ion-button
+              id="settings-button"
+              (click)="settingsModalIsOpen$.next(true)"
+            >
+              <ion-icon slot="icon-only" name="settings"></ion-icon>
+            </ion-button>
+          </ion-buttons>
         </ion-toolbar>
       </ion-header>
       <ion-content>
@@ -41,7 +51,7 @@ const routes: Routes = [];
         >
         </app-gif-list>
         <ion-infinite-scroll
-          threshold="100px"
+          threshold="20px"
           (ionInfinite)="loadMore($event, vm.gifs)"
         >
           <ion-infinite-scroll-content
@@ -50,6 +60,15 @@ const routes: Routes = [];
           >
           </ion-infinite-scroll-content>
         </ion-infinite-scroll>
+        <ion-popover
+          trigger="settings-button"
+          [isOpen]="vm.settingsModalIsOpen"
+          (ionPopoverDidDismiss)="settingsModalIsOpen$.next(false)"
+        >
+          <ng-template>
+            <app-settings></app-settings>
+          </ng-template>
+        </ion-popover>
       </ion-content>
     </ng-container>
   `,
@@ -60,6 +79,7 @@ export class HomeComponent {
 
   private _currentlyLoadingGifs$ = new BehaviorSubject<string[]>([]);
   private _loadedGifs$ = new BehaviorSubject<string[]>([]);
+  public settingsModalIsOpen$ = new BehaviorSubject<boolean>(false);
 
   private gifs$ = combineLatest([
     this.redditService.getGifs(this.subredditFormControl),
@@ -75,9 +95,13 @@ export class HomeComponent {
     )
   );
 
-  public vm$ = combineLatest([this.gifs$.pipe(startWith([]))]).pipe(
-    map(([gifs]) => ({
+  public vm$ = combineLatest([
+    this.gifs$.pipe(startWith([])),
+    this.settingsModalIsOpen$,
+  ]).pipe(
+    map(([gifs, settingsModalIsOpen]) => ({
       gifs,
+      settingsModalIsOpen,
     }))
   );
 

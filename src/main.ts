@@ -1,8 +1,11 @@
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClientModule } from '@angular/common/http';
 import { enableProdMode, importProvidersFrom } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
+import { IonicStorageModule } from '@ionic/storage-angular';
+import * as cordovaSQLiteDriver from 'localforage-cordovasqlitedriver';
+import { Drivers } from '@ionic/storage';
 
 import { AppComponent } from './app/app.component';
 import { environment } from './environments/environment';
@@ -29,6 +32,13 @@ bootstrapApplication(AppComponent, {
     importProvidersFrom(
       IonicModule.forRoot(),
       RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules }),
+      IonicStorageModule.forRoot({
+        driverOrder: [
+          cordovaSQLiteDriver._driver,
+          Drivers.IndexedDB,
+          Drivers.LocalStorage,
+        ],
+      }),
       HttpClientModule
     ),
   ],

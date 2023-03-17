@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
   catchError,
+  combineLatest,
   concatMap,
   debounceTime,
   distinctUntilChanged,
@@ -14,11 +15,14 @@ import {
   tap,
 } from 'rxjs';
 import { IGif } from '../interfaces/gif.interface';
-import { IRedditPagination, IRedditPost, IRedditResponse } from '../interfaces';
 import { FormControl } from '@angular/forms';
+
+import { SettingsService } from './settings.service';
+import { IRedditPagination, IRedditPost, IRedditResponse } from '../interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class RedditService {
+  private settings$ = this.settingsService.settings$;
   private _pagination$ = new BehaviorSubject<IRedditPagination>({
     after: null,
     totalFound: 0,
@@ -26,7 +30,10 @@ export class RedditService {
     infiniteScroll: null,
   });
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private settingsService: SettingsService
+  ) {}
 
   public getGifs(subredditFormControl: FormControl) {
     const subreddit$ = subredditFormControl.valueChanges.pipe(
@@ -43,15 +50,25 @@ export class RedditService {
       )
     );
 
-    return subreddit$.pipe(
-      switchMap((subreddit) => {
+    return combineLatest([subreddit$, this.settings$]).pipe(
+      switchMap(([subreddit, settings]) => {
         const gifsForCurrentPage$ = this._pagination$.pipe(
           concatMap((pagination) =>
-            this.fetchFromReddit(subreddit, 'hot', pagination.after)
+            this.fetchFromReddit(
+              subreddit,
+              settings.sort,
+              pagination.after,
+              settings.perPage
+            )
           )
         );
+
         const allGifs$ = gifsForCurrentPage$.pipe(
-          scan((previousGifs, currentGifs) => [...previousGifs, ...currentGifs])
+          scan((previousGifs, currentGifs) => [
+            ...previousGifs,
+            ...currentGifs,
+          ]),
+          tap((res) => console.log(res))
         );
 
         return allGifs$;
@@ -62,17 +79,28 @@ export class RedditService {
   private fetchFromReddit(
     subreddit: string,
     sort: string,
-    after: string | null
+    after: string | null,
+    perPage: number
   ) {
     return this.http
       .get<IRedditResponse>(
-        `https://www.reddit.com/r/${subreddit}/${sort}/.json?limit=100` +
+        `https://www.reddit.com/r/${subreddit}/${sort}/.json?limit=${perPage}` +
           (after ? `&after=${after}` : '')
       )
       .pipe(
         catchError(() => EMPTY),
         map((res) => this.convertRedditPostsToGifs(res.data.children))
       );
+  }
+
+  public nextPage(infiniteScrollEvent: Event, after: string) {
+    this._pagination$.next({
+      after,
+      totalFound: 0,
+      retries: 0,
+      infiniteScroll:
+        infiniteScrollEvent?.target as HTMLIonInfiniteScrollElement,
+    });
   }
 
   private convertRedditPostsToGifs(posts: IRedditPost[]): IGif[] {
@@ -121,15 +149,5 @@ export class RedditService {
 
     // No useable formats available
     return null;
-  }
-
-  nextPage(infiniteScrollEvent: Event, after: string) {
-    this._pagination$.next({
-      after,
-      totalFound: 0,
-      retries: 0,
-      infiniteScroll:
-        infiniteScrollEvent?.target as HTMLIonInfiniteScrollElement,
-    });
   }
 }
