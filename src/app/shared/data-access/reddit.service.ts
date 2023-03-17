@@ -1,21 +1,64 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, EMPTY, map, Observable, of } from 'rxjs';
+import {
+  BehaviorSubject,
+  catchError,
+  concatMap,
+  debounceTime,
+  distinctUntilChanged,
+  EMPTY,
+  map,
+  scan,
+  startWith,
+  switchMap,
+} from 'rxjs';
 import { IGif } from '../interfaces/gif.interface';
-import { IRedditPost, IRedditResponse } from '../interfaces';
+import { IRedditPagination, IRedditPost, IRedditResponse } from '../interfaces';
+import { FormControl } from '@angular/forms';
 
 @Injectable({ providedIn: 'root' })
 export class RedditService {
+  private _pagination$ = new BehaviorSubject<IRedditPagination>({
+    after: null,
+    totalFound: 0,
+    retries: 0,
+    infiniteScroll: null,
+  });
+
   constructor(private http: HttpClient) {}
 
-  public getGifs(subreddit: string) {
-    return this.fetchFromReddit(subreddit);
+  public getGifs(subredditFormControl: FormControl) {
+    const subreddit$ = subredditFormControl.valueChanges.pipe(
+      debounceTime(500),
+      distinctUntilChanged(),
+      startWith(subredditFormControl.value)
+    );
+
+    return subreddit$.pipe(
+      switchMap((subreddit) => {
+        const gifsForCurrentPage$ = this._pagination$.pipe(
+          concatMap((pagination) =>
+            this.fetchFromReddit(subreddit, 'hot', pagination.after)
+          )
+        );
+        const allGifs$ = gifsForCurrentPage$.pipe(
+          scan((previousGifs, currentGifs) => [...previousGifs, ...currentGifs])
+        );
+
+        return allGifs$;
+      })
+    );
   }
 
-  private fetchFromReddit(subreddit: string) {
+  private fetchFromReddit(
+    subreddit: string,
+    sort: string,
+    after: string | null
+  ) {
     return this.http
       .get<IRedditResponse>(
-        `https://www.reddit.com/r/${subreddit}/hot/.json?limit=100`
+        `https://www.reddit.com/r/${subreddit}/${sort}/.json?limit=100` +
+          (after ? `&after=${after}` : '')
       )
       .pipe(
         catchError(() => EMPTY),
@@ -69,5 +112,15 @@ export class RedditService {
 
     // No useable formats available
     return null;
+  }
+
+  nextPage(infiniteScrollEvent: Event, after: string) {
+    this._pagination$.next({
+      after,
+      totalFound: 0,
+      retries: 0,
+      infiniteScroll:
+        infiniteScrollEvent?.target as HTMLIonInfiniteScrollElement,
+    });
   }
 }

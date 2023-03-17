@@ -1,7 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+} from '@angular/core';
 import { IonicModule } from '@ionic/angular';
-import { IGif } from 'src/app/shared/interfaces/gif.interface';
+
+import { IGif } from '../../shared/interfaces/gif.interface';
 
 @Component({
   selector: 'app-gif-list',
@@ -10,15 +17,32 @@ import { IGif } from 'src/app/shared/interfaces/gif.interface';
   template: `
     <ion-list lines="none">
       <div class="gif" *ngFor="let gif of gifs; trackBy: trackByFn">
-        <ion-item button [detail]="false">
-          <video
-            playsInline
-            poster="none"
-            preload="none"
-            [loop]="true"
-            [muted]="true"
-            [src]="gif.src"
-          ></video>
+        <ion-item button [detail]="false" (click)="playVideo($event, gif)">
+          <ion-spinner *ngIf="gif.loading" color="light"></ion-spinner>
+
+          <div
+            [style.background]="
+              'url(' + gif.thumbnail + ') 50% 50% / cover no-repeat'
+            "
+            [ngStyle]="
+              !gif.dataLoaded
+                ? {
+                    filter: 'blur(3px) brightness(0.6)',
+                    transform: 'scale(1.1)'
+                  }
+                : {}
+            "
+            class="preload-background"
+          >
+            <video
+              playsInline
+              poster="none"
+              preload="none"
+              [loop]="true"
+              [muted]="true"
+              [src]="gif.src"
+            ></video>
+          </div>
           <ion-label>{{ gif.title }}</ion-label>
         </ion-item>
       </div>
@@ -88,6 +112,34 @@ import { IGif } from 'src/app/shared/interfaces/gif.interface';
 })
 export class GifListComponent {
   @Input() gifs!: IGif[];
+  @Output() gifLoadStart = new EventEmitter<string>();
+  @Output() gifLoadComplete = new EventEmitter<string>();
+
+  public playVideo(e: Event, gif: IGif) {
+    const video = e.target as HTMLVideoElement;
+
+    if (video.readyState === 4) {
+      if (video.paused) {
+        video.play();
+      } else {
+        video.pause();
+      }
+    } else {
+      if (video.getAttribute('data-event-loaddeddata') !== 'true') {
+        this.gifLoadStart.emit(gif.permalink);
+        video.load();
+
+        const handleVideoLoaded = async () => {
+          this.gifLoadComplete.emit(gif.permalink);
+          await video.play();
+          video.removeEventListener('loadeddata', handleVideoLoaded);
+        };
+
+        video.addEventListener('loadeddata', handleVideoLoaded);
+        video.setAttribute('data-event-loadeddata', 'true');
+      }
+    }
+  }
 
   public trackByFn(index: number, gif: IGif) {
     return gif.permalink;
