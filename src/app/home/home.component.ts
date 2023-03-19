@@ -1,14 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, NgModule } from '@angular/core';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { Routes } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+
 import { BehaviorSubject, combineLatest, map, startWith } from 'rxjs';
 
+import { SearchBarComponent } from './ui/search-bar.component';
 import { GifListComponent } from './ui/gif-list.component';
 import { RedditService } from '../shared/data-access/reddit.service';
 import { IGif } from '../shared/interfaces';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { SearchBarComponent } from './ui/search-bar.component';
 import { SettingsComponent } from '../settings/settings.component';
 
 const routes: Routes = [];
@@ -42,6 +43,12 @@ const routes: Routes = [];
             </ion-button>
           </ion-buttons>
         </ion-toolbar>
+        <ion-progress-bar
+          color="dark"
+          *ngIf="vm.isLoading"
+          type="indeterminate"
+          reversed="true"
+        ></ion-progress-bar>
       </ion-header>
       <ion-content>
         <app-gif-list
@@ -98,10 +105,12 @@ export class HomeComponent {
   public vm$ = combineLatest([
     this.gifs$.pipe(startWith([])),
     this.settingsModalIsOpen$,
+    this.redditService.isLoading$,
   ]).pipe(
-    map(([gifs, settingsModalIsOpen]) => ({
+    map(([gifs, settingsModalIsOpen, isLoading]) => ({
       gifs,
       settingsModalIsOpen,
+      isLoading,
     }))
   );
 

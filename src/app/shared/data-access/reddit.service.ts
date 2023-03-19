@@ -8,6 +8,7 @@ import {
   debounceTime,
   distinctUntilChanged,
   EMPTY,
+  expand,
   map,
   scan,
   startWith,
@@ -23,12 +24,18 @@ import { IRedditPagination, IRedditPost, IRedditResponse } from '../interfaces';
 @Injectable({ providedIn: 'root' })
 export class RedditService {
   private settings$ = this.settingsService.settings$;
+
+  private _isLoading$ = new BehaviorSubject(false);
   private _pagination$ = new BehaviorSubject<IRedditPagination>({
     after: null,
     totalFound: 0,
     retries: 0,
     infiniteScroll: null,
   });
+
+  public get isLoading$() {
+    return this._isLoading$.asObservable();
+  }
 
   constructor(
     private http: HttpClient,
@@ -52,23 +59,60 @@ export class RedditService {
 
     return combineLatest([subreddit$, this.settings$]).pipe(
       switchMap(([subreddit, settings]) => {
+        // Fetch Gifs
         const gifsForCurrentPage$ = this._pagination$.pipe(
+          tap(() => this._isLoading$.next(true)),
           concatMap((pagination) =>
             this.fetchFromReddit(
               subreddit,
               settings.sort,
               pagination.after,
               settings.perPage
+            ).pipe(
+              // Keep retrying until we have enough valid gifs to fill a page
+              // 'expand' will keep repeating itself as long as it returns
+              // a non-empty observable
+              expand((res, index) => {
+                const validGifs = res.gifs.filter((gif) => gif.src !== null);
+                const gifsRequired = res.gifsRequired - validGifs.length;
+                const maxAttempts = 10;
+
+                // Keep trying if all criteria is met
+                // - we need more gifs to fill the page
+                // - we got at least one gif back from the API
+                // - we haven't exceeded the max retries
+                const shouldKeepTrying =
+                  gifsRequired > 0 && res.gifs.length && index < maxAttempts;
+
+                if (!shouldKeepTrying) {
+                  pagination.infiniteScroll?.complete();
+                  this._isLoading$.next(false);
+                }
+
+                return shouldKeepTrying
+                  ? this.fetchFromReddit(
+                      subreddit,
+                      settings.sort,
+                      res.gifs[res.gifs.length - 1].name,
+                      gifsRequired
+                    )
+                  : EMPTY; // Return an empty observable to stop retrying
+              })
             )
+          ),
+          // Filter out any gifs without a src, and don't return more than the amount required
+          // NOTE: Even though expand will keep repeating, each result of expand will be passed
+          // here immediately without waiting for all expand calls to complete
+          map((res) =>
+            res.gifs
+              .filter((gif) => gif.src !== null)
+              .slice(0, res.gifsRequired)
           )
         );
 
+        // Every time we get a new batch of gifs, add it to the cached gifs
         const allGifs$ = gifsForCurrentPage$.pipe(
-          scan((previousGifs, currentGifs) => [
-            ...previousGifs,
-            ...currentGifs,
-          ]),
-          tap((res) => console.log(res))
+          scan((previousGifs, currentGifs) => [...previousGifs, ...currentGifs])
         );
 
         return allGifs$;
@@ -80,16 +124,19 @@ export class RedditService {
     subreddit: string,
     sort: string,
     after: string | null,
-    perPage: number
+    gifsRequired: number
   ) {
     return this.http
       .get<IRedditResponse>(
-        `https://www.reddit.com/r/${subreddit}/${sort}/.json?limit=${perPage}` +
+        `https://www.reddit.com/r/${subreddit}/${sort}/.json?limit=100` +
           (after ? `&after=${after}` : '')
       )
       .pipe(
         catchError(() => EMPTY),
-        map((res) => this.convertRedditPostsToGifs(res.data.children))
+        map((res) => ({
+          gifs: this.convertRedditPostsToGifs(res.data.children),
+          gifsRequired,
+        }))
       );
   }
 

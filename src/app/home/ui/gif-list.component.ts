@@ -6,6 +6,7 @@ import {
   Output,
   EventEmitter,
 } from '@angular/core';
+import { Browser } from '@capacitor/browser';
 import { IonicModule } from '@ionic/angular';
 
 import { IGif } from '../../shared/interfaces/gif.interface';
@@ -19,7 +20,6 @@ import { IGif } from '../../shared/interfaces/gif.interface';
       <div class="gif" *ngFor="let gif of gifs; trackBy: trackByFn">
         <ion-item button [detail]="false" (click)="playVideo($event, gif)">
           <ion-spinner *ngIf="gif.loading" color="light"></ion-spinner>
-
           <div
             [style.background]="
               'url(' + gif.thumbnail + ') 50% 50% / cover no-repeat'
@@ -45,6 +45,12 @@ import { IGif } from '../../shared/interfaces/gif.interface';
           </div>
           <ion-label>{{ gif.title }}</ion-label>
         </ion-item>
+        <ion-list-header>
+          <ion-label> {{ gif.title }} </ion-label>
+          <ion-button (click)="showComments(gif)">
+            <ion-icon name="chatbubbles"></ion-icon> {{ gif.comments }}
+          </ion-button>
+        </ion-list-header>
       </div>
     </ion-list>
   `,
@@ -139,6 +145,14 @@ export class GifListComponent {
         video.setAttribute('data-event-loadeddata', 'true');
       }
     }
+  }
+
+  public showComments(gif: IGif) {
+    Browser.open({
+      toolbarColor: '#fff',
+      url: `https://reddit.com/${gif.permalink}`,
+      windowName: '_system',
+    });
   }
 
   public trackByFn(index: number, gif: IGif) {
