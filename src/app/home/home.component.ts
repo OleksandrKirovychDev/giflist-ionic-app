@@ -25,7 +25,6 @@ const routes: Routes = [];
     SearchBarComponent,
     SettingsComponent,
   ],
-  providers: [],
   template: `
     <ng-container *ngIf="vm$ | async as vm">
       <ion-header>
@@ -79,6 +78,17 @@ const routes: Routes = [];
       </ion-content>
     </ng-container>
   `,
+  styles: [
+    `
+      ion-infinite-scroll-content {
+        margin-top: 20px;
+      }
+
+      ion-buttons {
+        margin: auto 0;
+      }
+    `,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HomeComponent {
